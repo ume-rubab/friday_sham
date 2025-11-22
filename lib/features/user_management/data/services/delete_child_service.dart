@@ -1,30 +1,68 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/material.dart';
 
 class DeleteChildService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FlutterLocalNotificationsPlugin _localNotifications = 
+      FlutterLocalNotificationsPlugin();
 
   /// Delete child and all associated data from Firebase
   Future<bool> deleteChild({
     required String parentId,
     required String childId,
+    String? childName, // Optional child name for notification
   }) async {
     try {
       print('🗑️ [DeleteChild] Starting deletion for child: $childId');
 
+      // Get child name before deletion (if not provided)
+      String? name = childName;
+      if (name == null) {
+        try {
+          final childDoc = await _firestore
+              .collection('parents')
+              .doc(parentId)
+              .collection('children')
+              .doc(childId)
+              .get();
+          if (childDoc.exists) {
+            final data = childDoc.data();
+            name = data?['name'] ?? data?['firstName'] ?? 'Child';
+          }
+        } catch (e) {
+          print('⚠️ [DeleteChild] Could not fetch child name: $e');
+          name = 'Child';
+        }
+      }
+
+      // 🔥 Show notification IMMEDIATELY (before slow delete operations)
+      await _showDeleteNotification(name ?? 'Child');
+      print('✅ [DeleteChild] Notification shown immediately');
+
+      // Delete operations in background (non-blocking for user)
       // 1. Delete child's location data
-      await _deleteLocationData(parentId, childId);
+      _deleteLocationData(parentId, childId).catchError((e) {
+        print('⚠️ [DeleteChild] Error deleting location: $e');
+      });
       
       // 2. Delete child's flagged messages
-      await _deleteFlaggedMessages(parentId, childId);
+      _deleteFlaggedMessages(parentId, childId).catchError((e) {
+        print('⚠️ [DeleteChild] Error deleting flagged messages: $e');
+      });
       
       // 3. Delete child's geofence data
-      await _deleteGeofenceData(parentId, childId);
+      _deleteGeofenceData(parentId, childId).catchError((e) {
+        print('⚠️ [DeleteChild] Error deleting geofence: $e');
+      });
       
       // 4. Delete child's general messages
-      await _deleteMessages(parentId, childId);
+      _deleteMessages(parentId, childId).catchError((e) {
+        print('⚠️ [DeleteChild] Error deleting messages: $e');
+      });
       
-      // 5. Delete child document from parent's children collection
+      // 5. Delete child document from parent's children collection (MOST IMPORTANT)
       await _firestore
           .collection('parents')
           .doc(parentId)
@@ -33,7 +71,9 @@ class DeleteChildService {
           .delete();
 
       // 6. Clear child's local data
-      await _clearChildLocalData(childId);
+      _clearChildLocalData(childId).catchError((e) {
+        print('⚠️ [DeleteChild] Error clearing local data: $e');
+      });
 
       print('✅ [DeleteChild] Child $childId deleted successfully');
       return true;
@@ -160,6 +200,70 @@ class DeleteChildService {
       print('✅ [DeleteChild] Local data cleared');
     } catch (e) {
       print('⚠️ [DeleteChild] Error clearing local data: $e');
+    }
+  }
+
+  /// Show notification in status bar when child is deleted
+  Future<void> _showDeleteNotification(String childName) async {
+    try {
+      // Create notification channel first (if not exists)
+      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+        'child_deleted_channel',
+        'Child Deleted Notifications',
+        description: 'Notifications when a child is deleted',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        showBadge: true,
+      );
+
+      final androidImplementation = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+
+      if (androidImplementation != null) {
+        await androidImplementation.createNotificationChannel(channel);
+        print('✅ [DeleteChild] Notification channel created');
+      }
+
+      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+          AndroidNotificationDetails(
+        'child_deleted_channel',
+        'Child Deleted Notifications',
+        channelDescription: 'Notifications when a child is deleted',
+        importance: Importance.max,
+        priority: Priority.high,
+        showWhen: true,
+        playSound: true,
+        enableVibration: true,
+        enableLights: true,
+        color: Color(0xFF007AFF),
+        ticker: 'Child deleted',
+      );
+
+      const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+          DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails platformChannelSpecifics = NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iOSPlatformChannelSpecifics,
+      );
+
+      await _localNotifications.show(
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        'Child Deleted',
+        '$childName deleted successfully',
+        platformChannelSpecifics,
+        payload: 'child_deleted',
+      );
+
+      print('✅ [DeleteChild] Notification shown: $childName deleted');
+    } catch (e) {
+      print('❌ [DeleteChild] Error showing notification: $e');
     }
   }
 }

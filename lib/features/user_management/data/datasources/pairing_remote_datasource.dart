@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../../../../core/services/qr_code_service.dart';
+import '../../../notifications/data/services/fcm_service.dart';
 
 abstract class PairingRemoteDataSource {
   Future<String> generateParentQRCode({required String parentUid});
@@ -101,6 +103,39 @@ class PairingRemoteDataSourceImpl implements PairingRemoteDataSource {
          'timestamp': FieldValue.serverTimestamp(),
          'isTrackingEnabled': false,
        });
+
+     // 🔔 Save notification to Firestore (NO Cloud Functions needed)
+     // Parent app will listen to Firestore and show local notification
+     try {
+       await firestore
+           .collection('parents')
+           .doc(parentUid)
+           .collection('children')
+           .doc(childUid)
+           .collection('notifications')
+           .add({
+         'id': DateTime.now().millisecondsSinceEpoch.toString(),
+         'parentId': parentUid,
+         'childId': childUid,
+         'alertType': 'childAdded',
+         'title': '✅ Child Added',
+         'body': '$childName has been successfully added to your account!',
+         'data': {
+           'childId': childUid,
+           'childName': childName,
+           'alertType': 'childAdded',
+         },
+         'timestamp': FieldValue.serverTimestamp(),
+         'isRead': false,
+         'actionUrl': '/children/list',
+       });
+       
+       print('✅ Notification saved to Firestore: Child Added - $childName');
+       print('📱 Parent app will show notification via Firestore stream');
+     } catch (e) {
+       print('⚠️ Error saving notification: $e');
+       // Don't throw - notification failure shouldn't break child creation
+     }
    }
 
   @override

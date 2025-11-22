@@ -15,6 +15,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'parent_settings_screen.dart';
 import 'package:parental_control_app/features/chatbot/presentation/pages/chatbot_screen.dart';
+import 'package:parental_control_app/features/notifications/data/services/firestore_notification_listener.dart';
 
 class ParentHomeScreen extends StatefulWidget {
   const ParentHomeScreen({super.key});
@@ -28,17 +29,20 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
   bool _isLoading = true;
   int _selectedIndex = 0;
   StreamSubscription<QuerySnapshot>? _childrenStream;
+  FirestoreNotificationListener? _notificationListener;
 
   @override
   void initState() {
     super.initState();
     _loadChildren();
     _setupRealtimeListener();
+    _startNotificationListener();
   }
 
   @override
   void dispose() {
     _childrenStream?.cancel();
+    _notificationListener?.stopListening();
     super.dispose();
   }
 
@@ -70,6 +74,17 @@ class _ParentHomeScreenState extends State<ParentHomeScreen> {
           backgroundColor: Colors.red,
         ),
       );
+    }
+  }
+
+  /// Start Firestore notification listener (NO Cloud Functions needed)
+  Future<void> _startNotificationListener() async {
+    try {
+      _notificationListener = FirestoreNotificationListener();
+      await _notificationListener!.startListening();
+      print('✅ [ParentHome] Firestore notification listener started');
+    } catch (e) {
+      print('❌ [ParentHome] Error starting notification listener: $e');
     }
   }
 

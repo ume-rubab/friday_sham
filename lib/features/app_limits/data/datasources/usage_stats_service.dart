@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_usage_stats.dart';
 import 'local_storage_service.dart';
 import '../../../notifications/data/services/notification_integration_service.dart';
@@ -234,16 +235,132 @@ class UsageStatsService {
     }
   }
 
+  // Real-time monitoring state
+  Timer? _realTimeMonitoringTimer;
+  Timer? _realTimeSyncTimer;
+  String? _lastForegroundApp;
+  bool _isRealTimeMonitoring = false;
+  
   /// Start monitoring app usage (for real-time updates)
   Future<void> startMonitoring() async {
     try {
+      // Check permission first
+      final hasPermission = await hasUsageStatsPermission();
+      if (!hasPermission) {
+        print('⚠️ [UsageStats] Usage Access permission not granted - real-time monitoring disabled');
+        print('⚠️ [UsageStats] Please grant permission to enable real-time tracking');
+        return;
+      }
+      
       await _channel.invokeMethod('startMonitoring');
+      
       // Start periodic restriction checking
       _startRestrictionChecker();
+      
       // Set up method channel handler for immediate restriction checks
       _setupMethodChannelHandler();
+      
+      // Start REAL-TIME monitoring (foreground app tracking)
+      _startRealTimeMonitoring();
+      
+      print('✅ [UsageStats] Real-time monitoring started');
     } catch (e) {
-      print('Error starting monitoring: $e');
+      print('❌ [UsageStats] Error starting monitoring: $e');
+    }
+  }
+  
+  /// Start real-time foreground app monitoring
+  void _startRealTimeMonitoring() {
+    if (_isRealTimeMonitoring) {
+      print('⚠️ [UsageStats] Real-time monitoring already running');
+      return;
+    }
+    
+    _isRealTimeMonitoring = true;
+    print('🔄 [UsageStats] Starting real-time foreground app monitoring...');
+    
+    // Check foreground app every 2 seconds (REAL-TIME)
+    _realTimeMonitoringTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      try {
+        final currentApp = await getCurrentForegroundApp();
+        
+        if (currentApp != null && currentApp != _lastForegroundApp) {
+          print('📱 [UsageStats] REAL-TIME: App changed to $currentApp');
+          _lastForegroundApp = currentApp;
+          
+          // You can add Firebase sync here for real-time updates to parent
+          // await _syncCurrentAppToFirebase(currentApp);
+        }
+      } catch (e) {
+        print('⚠️ [UsageStats] Error in real-time monitoring: $e');
+      }
+    });
+    
+    // Sync usage stats to Firebase every 30 seconds (for parent dashboard)
+    _realTimeSyncTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+      try {
+        await _syncUsageStatsToFirebase();
+      } catch (e) {
+        print('⚠️ [UsageStats] Error syncing to Firebase: $e');
+      }
+    });
+    
+    print('✅ [UsageStats] Real-time monitoring active (checking every 2s, syncing every 30s)');
+  }
+  
+  /// Sync current usage stats to Firebase for parent dashboard
+  Future<void> _syncUsageStatsToFirebase() async {
+    try {
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      final stats = await getAppUsageStats(startTime: startOfDay, endTime: now);
+      
+      // Get parent and child IDs
+      final prefs = await SharedPreferences.getInstance();
+      final parentId = prefs.getString('parent_uid');
+      final childId = prefs.getString('child_uid');
+      
+      if (parentId == null || childId == null) {
+        return; // Not logged in or not linked
+      }
+      
+      // Sync to Firebase for real-time parent dashboard
+      print('📊 [UsageStats] Syncing ${stats.length} apps to Firebase (real-time update)');
+      
+      final firestore = FirebaseFirestore.instance;
+      
+      // Sync current app usage stats
+      await firestore
+          .collection('parents')
+          .doc(parentId)
+          .collection('children')
+          .doc(childId)
+          .collection('realTimeUsage')
+          .doc('current')
+          .set({
+        'stats': stats.map((s) => s.toMap()).toList(),
+        'lastUpdated': FieldValue.serverTimestamp(),
+        'currentApp': _lastForegroundApp,
+        'totalScreenTime': stats.fold<int>(0, (sum, s) => sum + s.foregroundTime.inMinutes),
+      }, SetOptions(merge: true));
+      
+      // Also sync current foreground app separately for instant updates
+      if (_lastForegroundApp != null) {
+        await firestore
+            .collection('parents')
+            .doc(parentId)
+            .collection('children')
+            .doc(childId)
+            .update({
+          'currentForegroundApp': _lastForegroundApp,
+          'lastAppUpdate': FieldValue.serverTimestamp(),
+        });
+      }
+      
+      print('✅ [UsageStats] Real-time data synced to Firebase');
+      
+    } catch (e) {
+      print('❌ [UsageStats] Error syncing to Firebase: $e');
     }
   }
 
@@ -451,10 +568,30 @@ class UsageStatsService {
   Future<void> stopMonitoring() async {
     try {
       await _channel.invokeMethod('stopMonitoring');
+      
+      // Stop real-time monitoring
+      _realTimeMonitoringTimer?.cancel();
+      _realTimeMonitoringTimer = null;
+      
+      _realTimeSyncTimer?.cancel();
+      _realTimeSyncTimer = null;
+      
+      _isRealTimeMonitoring = false;
+      _lastForegroundApp = null;
+      
+      print('⏹️ [UsageStats] Real-time monitoring stopped');
     } catch (e) {
-      print('Error stopping monitoring: $e');
+      print('❌ [UsageStats] Error stopping monitoring: $e');
     }
   }
+  
+  /// Get current foreground app (real-time)
+  Future<String?> getCurrentForegroundAppRealTime() async {
+    return await getCurrentForegroundApp();
+  }
+  
+  /// Check if real-time monitoring is active
+  bool get isRealTimeMonitoringActive => _isRealTimeMonitoring;
 
   /// Request immediate lock screen
   Future<void> requestLockNow() async {

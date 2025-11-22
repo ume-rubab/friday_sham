@@ -64,7 +64,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
 
   Stream<List<NotificationModel>> _streamAllChildrenNotifications(String parentId) {
     // Helper function to fetch all notifications
-    Future<List<NotificationModel>> _fetchAllNotifications() async {
+    Future<List<NotificationModel>> fetchAllNotifications() async {
       try {
         print('📡 [NotificationStream] Fetching notifications for parent: $parentId');
         final childrenSnapshot = await firestore
@@ -123,7 +123,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
     }
 
     // Load immediately, then periodically update
-    return Stream.fromFuture(_fetchAllNotifications())
+    return Stream.fromFuture(fetchAllNotifications())
         .asyncExpand((initialNotifications) async* {
           // Emit initial load immediately
           print('📡 [NotificationStream] Emitting initial notifications: ${initialNotifications.length}');
@@ -131,7 +131,7 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
           
           // Then emit periodic updates every 3 seconds
           await for (final _ in Stream.periodic(const Duration(seconds: 3))) {
-            final updated = await _fetchAllNotifications();
+            final updated = await fetchAllNotifications();
             print('📡 [NotificationStream] Emitting periodic update: ${updated.length}');
             yield updated;
           }

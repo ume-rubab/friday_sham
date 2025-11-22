@@ -20,14 +20,13 @@ class FCMService {
 
     try {
       // Request permission for notifications
-      NotificationSettings settings = await _messaging.requestPermission(
+      final NotificationSettings settings = await _messaging.requestPermission(
         alert: true,
-        announcement: false,
         badge: true,
+        sound: true,
         carPlay: false,
         criticalAlert: false,
         provisional: false,
-        sound: true,
       );
 
       print('🔔 FCM Permission Status: ${settings.authorizationStatus}');

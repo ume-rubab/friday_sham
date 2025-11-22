@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'package:dartz/dartz.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../domain/entities/notification_entity.dart';
 import '../../domain/usecases/get_notifications_usecase.dart';
 import '../../domain/usecases/stream_notifications_usecase.dart';
 import '../../domain/usecases/mark_notification_read_usecase.dart';
-import '../../../../core/errors/failures.dart';
 
 part 'notification_event.dart';
 part 'notification_state.dart';

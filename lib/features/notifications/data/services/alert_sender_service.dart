@@ -191,7 +191,7 @@ class AlertSenderService {
   }) async {
     try {
       final title = '⏰ Screen Time Limit Reached';
-      final body = 'Daily limit of ${dailyLimitMinutes} minutes reached. Current usage: ${currentUsageMinutes} minutes';
+      final body = 'Daily limit of $dailyLimitMinutes minutes reached. Current usage: $currentUsageMinutes minutes';
 
       final notification = NotificationModel(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -391,6 +391,37 @@ class AlertSenderService {
       print('✅ Predictive threat alert sent');
     } catch (e) {
       print('❌ Error sending predictive threat alert: $e');
+    }
+  }
+
+  /// Send simple test notification (for testing purposes)
+  Future<void> sendTestNotification({
+    required String parentId,
+    required String childId,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      final notification = NotificationModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        parentId: parentId,
+        childId: childId,
+        alertType: AlertType.general,
+        title: title,
+        body: body,
+        data: {
+          'alertType': 'test',
+          'childId': childId,
+        },
+        timestamp: DateTime.now(),
+        actionUrl: '/children/list',
+      );
+
+      await _sendAlert(notification);
+      print('✅ Test notification sent: $title');
+    } catch (e) {
+      print('❌ Error sending test notification: $e');
+      rethrow;
     }
   }
 

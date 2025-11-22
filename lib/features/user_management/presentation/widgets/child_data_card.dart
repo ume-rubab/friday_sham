@@ -131,6 +131,7 @@ class _ChildDataCardState extends State<ChildDataCard> {
         final success = await _deleteChildService.deleteChild(
           parentId: widget.parentId,
           childId: widget.childId,
+          childName: widget.childName, // Pass child name for notification
         );
 
         // Close loading dialog

@@ -6,6 +6,7 @@ import '../datasources/message_remote_datasource.dart';
 import '../../../location_tracking/data/services/geofencing_detection_service.dart';
 import '../../../location_tracking/data/datasources/geofence_remote_datasource.dart';
 import '../../../app_limits/data/services/real_time_app_usage_service.dart';
+import '../../../app_limits/data/datasources/usage_stats_service.dart';
 
 class ChildAppInitializationService {
   final MessageRemoteDataSourceImpl _messageDataSource;
@@ -127,8 +128,16 @@ class ChildAppInitializationService {
       print('🔄 [ChildAppInit] Starting tracking service...');
       await _realTimeAppUsageService!.startTracking();
       
+      // Also start UsageStatsService real-time monitoring
+      print('🔄 [ChildAppInit] Starting UsageStatsService real-time monitoring...');
+      final usageStatsService = UsageStatsService();
+      await usageStatsService.startMonitoring();
+      print('✅ [ChildAppInit] UsageStatsService real-time monitoring started');
+      
       print('✅ [ChildAppInit] App usage tracking and installed apps sync initialized');
-      print('📱 [ChildAppInit] Installed apps will sync immediately and then every 5 minutes');
+      print('📱 [ChildAppInit] Installed apps will sync immediately and then every 2 minutes');
+      print('🔄 [ChildAppInit] Real-time app monitoring active (every 2 seconds)');
+      print('📊 [ChildAppInit] Usage stats syncing to Firebase every 30 seconds');
       print('🔄 [ChildAppInit] ====================================================');
     } catch (e, stackTrace) {
       print('❌ [ChildAppInit] Error initializing app usage tracking: $e');

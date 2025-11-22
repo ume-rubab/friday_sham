@@ -195,6 +195,20 @@ Future<void> handleForegroundMessage(RemoteMessage message) async {
 /// Show local notification
 /// This ensures notification appears in system tray (phone's notification area)
 Future<void> _showLocalNotification(RemoteMessage message) async {
+  // Get title and body from notification payload OR data payload
+  // This ensures notifications show even when sent with data-only payload
+  final String title = message.notification?.title ?? 
+                       message.data['title']?.toString() ?? 
+                       'SafeNest Alert';
+  final String body = message.notification?.body ?? 
+                      message.data['body']?.toString() ?? 
+                      message.data['message']?.toString() ?? 
+                      'You have a new notification';
+
+  print('📱 Showing local notification:');
+  print('   Title: $title');
+  print('   Body: $body');
+
   final AndroidNotificationDetails androidPlatformChannelSpecifics =
       AndroidNotificationDetails(
     'high_importance_channel',
@@ -208,8 +222,8 @@ Future<void> _showLocalNotification(RemoteMessage message) async {
     enableLights: true, // Enable LED light
     color: const Color(0xFF007AFF), // Notification color (blue)
     styleInformation: BigTextStyleInformation(
-      message.notification?.body ?? '',
-      contentTitle: message.notification?.title ?? 'Notification',
+      body,
+      contentTitle: title,
     ), // Big text style for better visibility
     fullScreenIntent: false, // Don't show full screen (just system tray)
     ongoing: false, // Not ongoing - can be dismissed
@@ -231,10 +245,12 @@ Future<void> _showLocalNotification(RemoteMessage message) async {
 
   await flutterLocalNotificationsPlugin.show(
     message.hashCode,
-    message.notification?.title ?? 'Notification',
-    message.notification?.body ?? '',
+    title,
+    body,
     platformChannelSpecifics,
     payload: message.data.toString(),
   );
+  
+  print('✅ Local notification shown in system tray');
 }
 
